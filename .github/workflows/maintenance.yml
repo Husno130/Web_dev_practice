@@ -1,0 +1,27 @@
+name: Database maintenance (prune old data)
+
+on:
+  schedule:
+    # First day of every month at 03:00 UTC.
+    - cron: '0 3 1 * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  prune:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Prune old price history and scrape run logs
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          curl --fail-with-body -sS -X POST \
+            "$SUPABASE_URL/rest/v1/rpc/prune_old_data" \
+            -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" \
+            -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
+            -H "Content-Type: application/json" \
+            -d '{"p_history_days": 365, "p_runs_days": 30}'
+          echo "Prune complete."

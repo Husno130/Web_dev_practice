@@ -1,0 +1,60 @@
+name: Scrape Graana (Islamabad)
+
+on:
+  schedule:
+    # Staggered 30 minutes after the Zameen job to avoid overlapping load.
+    - cron: '30 */6 * * *'
+  workflow_dispatch:
+    inputs:
+      max_pages:
+        description: 'Maximum number of listing pages to scrape'
+        required: false
+        default: '10'
+      store_raw:
+        description: 'Store raw listing JSON (increases DB size — leave off on hobby tier)'
+        type: boolean
+        default: false
+
+concurrency:
+  group: scrape-graana
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: scraper
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: scraper/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Run scraper
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          PROXY_SERVER: ${{ secrets.PROXY_SERVER }}
+        run: |
+          npm run scrape -- \
+            --source graana \
+            --city Islamabad \
+            --max-pages "${{ github.event.inputs.max_pages || '10' }}" \
+            ${{ github.event.inputs.store_raw == 'true' && '--store-raw' || '' }}

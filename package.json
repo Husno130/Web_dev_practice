@@ -1,0 +1,15 @@
+{
+  "name": "property-cost-estimator",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Scrape Islamabad property listings and estimate the true cost of building a house on a plot.",
+  "scripts": {
+    "install:all": "npm --prefix web install && npm --prefix scraper install",
+    "web:dev": "npm --prefix web run dev",
+    "web:build": "npm --prefix web run build",
+    "web:start": "npm --prefix web run start",
+    "scrape:zameen": "npm --prefix scraper run scrape -- --source zameen --city Islamabad",
+    "scrape:graana": "npm --prefix scraper run scrape -- --source graana --city Islamabad",
+    "scraper:test": "npm --prefix scraper test"
+  }
+}
