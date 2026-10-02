@@ -13,6 +13,19 @@ export function isSupabaseConfigured(): boolean {
   );
 }
 
+/**
+ * Normalise a Supabase project URL. The JS client appends `/rest/v1` itself,
+ * so a value like `https://x.supabase.co/rest/v1` (a common copy/paste error)
+ * must be reduced to the bare project URL.
+ */
+export function normalizeSupabaseUrl(raw: string): string {
+  return raw
+    .trim()
+    .replace(/\/+$/, "")
+    .replace(/\/rest\/v1$/i, "")
+    .replace(/\/+$/, "");
+}
+
 let cachedClient: SupabaseClient<Database> | null = null;
 
 /**
@@ -25,7 +38,7 @@ export function createServerSupabaseClient(): SupabaseClient<Database> | null {
   if (cachedClient) return cachedClient;
 
   cachedClient = createClient<Database>(
-    process.env.NEXT_PUBLIC_SUPABASE_URL as string,
+    normalizeSupabaseUrl(process.env.NEXT_PUBLIC_SUPABASE_URL as string),
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY as string,
     {
       auth: { persistSession: false, autoRefreshToken: false },

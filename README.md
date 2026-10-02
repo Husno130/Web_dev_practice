@@ -137,6 +137,33 @@ range (±15%) and PKR per sqft.
 - Free-tier limits: 500 MB database, ~5 GB egress/month. The design keeps listing
   rows small and prunes history; monitor usage in the Supabase dashboard.
 
+## Troubleshooting
+
+- **`Invalid path specified in request URL` (PGRST125):** your `SUPABASE_URL`
+  includes `/rest/v1`. Use the bare project URL
+  (`https://<ref>.supabase.co`) — the clients normalise this automatically now,
+  but it is cleaner to store it correctly. If Vercel has the suffixed value, the
+  site silently falls back to demo data until it is fixed/redeployed.
+- **Playwright browser download fails:** set `CHROMIUM_EXECUTABLE_PATH` to a
+  system Chrome/Chromium binary (e.g. `/usr/bin/chromium`) to run locally. CI
+  installs the bundled browser via `npx playwright install --with-deps chromium`.
+- **Zameen/Graana block CI:** both use bot protection; GitHub's datacenter IPs
+  are often challenged. Set the optional `PROXY_SERVER` secret, or run the
+  scraper from a machine/container with a residential IP.
+
+## How the scrapers work
+
+- **Zameen** renders results with hashed CSS classes. The parser reads each
+  card's individual field elements (price, location, area) in document order —
+  regexing the concatenated card text would merge a location ending in a digit
+  with the following area (e.g. "Phase 2" + "1 Kanal" → "21 Kanal"),
+  corrupting land-price medians.
+- **Graana** server-renders only the first page; later pages come from its
+  Next.js data endpoint
+  (`/_next/data/<buildId>/sale/plot-sale-islamabad-1.json?...&page=N`). The
+  scraper reads `__NEXT_DATA__` for the `buildId` and first 30 listings, then
+  fetches subsequent pages as JSON from within the browser context.
+
 ## Roadmap
 
 - [x] Schema, rate cards, scraper package, web app, estimator, CI

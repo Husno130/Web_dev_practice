@@ -29,6 +29,19 @@ export interface FinishRunInput {
   error?: string | null;
 }
 
+/**
+ * Normalise a Supabase project URL. The JS client appends `/rest/v1` itself,
+ * so a value like `https://x.supabase.co/rest/v1` (a common copy/paste error)
+ * must be reduced to the bare project URL.
+ */
+export function normalizeSupabaseUrl(raw: string): string {
+  return raw
+    .trim()
+    .replace(/\/+$/, '')
+    .replace(/\/rest\/v1$/i, '')
+    .replace(/\/+$/, '');
+}
+
 /** Read Supabase credentials from an environment object, or null when absent. */
 export function readSupabaseConfig(
   env: NodeJS.ProcessEnv = process.env,
@@ -36,7 +49,7 @@ export function readSupabaseConfig(
   const url = env.SUPABASE_URL?.trim();
   const serviceRoleKey = env.SUPABASE_SERVICE_ROLE_KEY?.trim();
   if (!url || !serviceRoleKey) return null;
-  return { url, serviceRoleKey };
+  return { url: normalizeSupabaseUrl(url), serviceRoleKey };
 }
 
 export function createSupabaseClient(config: SupabaseConfig): SupabaseClient {

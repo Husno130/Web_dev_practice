@@ -3,7 +3,16 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
 import { parseZameenHtml, parseZameenListingId } from '../src/parsers/zameen.js';
-import { parseGraanaHtml, parseGraanaListingId } from '../src/parsers/graana.js';
+import {
+  parseGraanaHtml,
+  parseGraanaListingId,
+  parseGraanaNextData,
+} from '../src/parsers/graana.js';
+import {
+  buildGraanaDataUrl,
+  buildGraanaSearchUrl,
+  graanaSearchPath,
+} from '../src/sources/graana.js';
 import { toScrapedListing } from '../src/lib/normalize.js';
 
 const ZAMEEN_BASE = 'https://www.zameen.com/Plots/Islamabad-3-1.html';
@@ -81,6 +90,36 @@ test('parseZameenListingId parses ids from property URLs', () => {
   assert.equal(parseZameenListingId('/about/us'), null);
 });
 
+// --- Current (hashed-class) Zameen markup ----------------------------------
+
+test('parseZameenHtml supports the current hashed-class markup', () => {
+  const cards = parseZameenHtml(fixture('zameen-islamabad-new.html'), ZAMEEN_BASE);
+  assert.equal(cards.length, 3);
+
+  const [first] = cards;
+  assert.ok(first);
+  assert.equal(first.sourceListingId, '54795290');
+  assert.equal(first.title, 'End Your Search For Commercial Plot Here And Sale Now');
+  assert.equal(first.priceText, '4.85 Crore');
+  assert.equal(first.location, 'Bahria Enclave - Sector C, Bahria Enclave');
+  assert.equal(first.areaText, '6.7 Marla');
+});
+
+test('current-markup Zameen cards normalise to ScrapedListings', () => {
+  const cards = parseZameenHtml(fixture('zameen-islamabad-new.html'), ZAMEEN_BASE);
+  const listings = cards
+    .map((card) => toScrapedListing(card, { source: 'zameen', city: 'Islamabad' }))
+    .filter((l): l is NonNullable<typeof l> => l !== null);
+
+  assert.equal(listings.length, 3);
+  assert.equal(listings[0]?.price_pkr, 48_500_000);
+  assert.equal(listings[0]?.sector, 'Bahria Town');
+  assert.equal(listings[0]?.area_sqft, 1824.08);
+  assert.equal(listings[1]?.price_pkr, 25_000_000);
+  assert.equal(listings[2]?.sector, 'F-14');
+  assert.equal(listings[2]?.area_sqft, 2967.53);
+});
+
 // ---------------------------------------------------------------------------
 // Graana parser
 // ---------------------------------------------------------------------------
@@ -126,6 +165,45 @@ test('parseGraanaListingId parses ids from property URLs', () => {
     '987654',
   );
   assert.equal(parseGraanaListingId('https://www.graana.com/about/'), null);
+});
+
+test('parseGraanaNextData reads the embedded Next.js payload', () => {
+  const cards = parseGraanaNextData(fixture('graana-next-data.html'));
+  assert.equal(cards.length, 2);
+
+  const [first] = cards;
+  assert.ok(first);
+  assert.equal(first.sourceListingId, '1557300');
+  assert.equal(first.sourceUrl, 'https://www.graana.com/property/1557300/');
+  assert.equal(first.priceText, '160000000');
+  assert.equal(first.areaText, '20 marla');
+  assert.equal(first.location, 'H-13');
+  assert.equal(first.title, '20 Marla commercial plot for sale');
+});
+
+test('Graana Next data maps to normalised ScrapedListings', () => {
+  const cards = parseGraanaNextData(fixture('graana-next-data.html'));
+  const listings = cards
+    .map((card) => toScrapedListing(card, { source: 'graana', city: 'Islamabad' }))
+    .filter((l): l is NonNullable<typeof l> => l !== null);
+
+  assert.equal(listings.length, 2);
+  assert.equal(listings[0]?.price_pkr, 160_000_000);
+  assert.equal(listings[0]?.sector, 'H-13');
+  assert.equal(listings[0]?.area_sqft, 5445);
+  assert.equal(listings[1]?.sector, 'Gulberg');
+});
+
+test('Graana URL builders produce the search and paginated data endpoints', () => {
+  assert.equal(
+    buildGraanaSearchUrl('Islamabad'),
+    'https://www.graana.com/sale/plot-sale-islamabad-1/',
+  );
+  assert.equal(graanaSearchPath('Islamabad'), 'sale/plot-sale-islamabad-1');
+  assert.equal(
+    buildGraanaDataUrl('BUILD123', 'sale/plot-sale-islamabad-1', 2),
+    'https://www.graana.com/_next/data/BUILD123/sale/plot-sale-islamabad-1.json?purpose=sale&id=plot-sale-islamabad-1&pageSize=30&page=2',
+  );
 });
 
 // ---------------------------------------------------------------------------

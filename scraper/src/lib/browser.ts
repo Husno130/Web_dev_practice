@@ -16,6 +16,8 @@ export interface BrowserSession {
 
 export interface BrowserOptions {
   proxyServer?: string;
+  /** Path to a system Chromium/Chrome binary. Overrides the bundled browser. */
+  executablePath?: string;
 }
 
 /**
@@ -25,9 +27,20 @@ export interface BrowserOptions {
  */
 export async function createBrowserSession(opts: BrowserOptions = {}): Promise<BrowserSession> {
   const proxy = opts.proxyServer ?? process.env.PROXY_SERVER?.trim();
+  // Optional system browser override (e.g. a snap/system chromium) for
+  // environments where Playwright's bundled download is unavailable.
+  const executablePath =
+    opts.executablePath ??
+    process.env.CHROMIUM_EXECUTABLE_PATH?.trim() ??
+    undefined;
   const browser = await chromium.launch({
     headless: true,
-    args: ['--disable-blink-features=AutomationControlled', '--no-sandbox'],
+    ...(executablePath ? { executablePath } : {}),
+    args: [
+      '--disable-blink-features=AutomationControlled',
+      '--no-sandbox',
+      '--disable-dev-shm-usage',
+    ],
     ...(proxy ? { proxy: { server: proxy } } : {}),
   });
 

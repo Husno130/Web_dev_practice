@@ -115,6 +115,118 @@ function buildCard($: $Root, $container: $Scope, baseUrl: string): RawCard | nul
   };
 }
 
+const GRAANA_BASE = 'https://www.graana.com';
+
+export interface GraanaNextData {
+  buildId: string | null;
+  properties: Record<string, unknown>[];
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
+/**
+ * Extract the embedded `__NEXT_DATA__` payload. Graana server-renders the first
+ * results page into `props.pageProps.properties`; this is far more reliable than
+ * DOM scraping because the markup uses hashed class names.
+ */
+export function extractGraanaNextData(html: string): GraanaNextData | null {
+  const match = html.match(/<script id="__NEXT_DATA__"[^>]*>([\s\S]*?)<\/script>/);
+  if (!match) return null;
+  try {
+    const data = asRecord(JSON.parse(match[1]));
+    if (!data) return null;
+    const buildId = typeof data.buildId === 'string' ? data.buildId : null;
+    const pageProps = asRecord(asRecord(data.props)?.pageProps);
+    const properties = Array.isArray(pageProps?.properties) ? pageProps.properties : [];
+    return { buildId, properties: properties as Record<string, unknown>[] };
+  } catch {
+    return null;
+  }
+}
+
+function nestedName(value: unknown): string | null {
+  const rec = asRecord(value);
+  const name = rec?.name;
+  return typeof name === 'string' && name.trim() ? name.trim() : null;
+}
+
+/** Map a single Graana `properties[]` object into a RawCard. */
+export function graanaPropertyToCard(prop: Record<string, unknown>): RawCard | null {
+  const id = prop.id;
+  if (id == null) return null;
+  const idStr = String(id);
+
+  const size = prop.size;
+  const sizeUnit = typeof prop.sizeUnit === 'string' ? prop.sizeUnit : '';
+  const areaText = size != null && size !== '' ? `${size} ${sizeUnit}`.trim() : null;
+
+  const price = prop.price;
+  const priceText = price == null || price === '' ? null : String(price);
+
+  const purposeRaw = typeof prop.purpose === 'string' ? prop.purpose.toLowerCase() : '';
+  const purpose = purposeRaw === 'rent' ? 'rent' : 'sale';
+
+  const title =
+    (typeof prop.customTitle === 'string' && prop.customTitle.trim()) ||
+    (typeof prop.name === 'string' && prop.name.trim()) ||
+    null;
+
+  const areaName = nestedName(prop.area);
+  const cityName = nestedName(prop.city);
+  const location = areaName ?? cityName ?? null;
+
+  const propertyType = typeof prop.type === 'string' && prop.type.trim() ? prop.type : 'plot';
+
+  const toNum = (v: unknown): number | null => {
+    if (v == null || v === '') return null;
+    const n = Number(v);
+    return Number.isFinite(n) ? n : null;
+  };
+
+  return {
+    sourceListingId: idStr,
+    sourceUrl: `${GRAANA_BASE}/property/${idStr}/`,
+    title: title || null,
+    description: null,
+    purpose,
+    propertyType,
+    priceText,
+    location,
+    areaText,
+    bedrooms: toNum(prop.bed),
+    bathrooms: toNum(prop.bath),
+    latitude: null,
+    longitude: null,
+    raw: prop,
+  };
+}
+
+/** Map a list of Graana `properties[]` objects into de-duplicated RawCards. */
+export function parseGraanaProperties(properties: Record<string, unknown>[]): RawCard[] {
+  const cards: RawCard[] = [];
+  const seen = new Set<string>();
+  for (const prop of properties) {
+    const card = graanaPropertyToCard(prop);
+    if (!card || !card.sourceListingId || seen.has(card.sourceListingId)) continue;
+    seen.add(card.sourceListingId);
+    cards.push(card);
+  }
+  return cards;
+}
+
+/**
+ * Parse the embedded Next.js data from a Graana search page. Preferred over
+ * `parseGraanaHtml`. Returns [] when there is no usable embedded payload.
+ */
+export function parseGraanaNextData(html: string): RawCard[] {
+  const data = extractGraanaNextData(html);
+  return data ? parseGraanaProperties(data.properties) : [];
+}
+
 /**
  * Parse a Graana search-results page into listing cards.
  * @param html   raw HTML of the search page
